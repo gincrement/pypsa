@@ -1,8 +1,19 @@
 import pandas as pd
 import pytest
 
-from pypsa import Network
-from pypsa.components.components import Component
+from pypsa import Components, Network
+from pypsa.components.legacy import Component
+from pypsa.components.types import get as get_component_type
+
+
+def test_components_non_implemented():
+    """Test that the components module raises an ImportError if imported directly."""
+    ct = get_component_type("Generator")
+    with pytest.raises(NotImplementedError):
+        Components(ctype=ct, names=["Generator"])
+    n = Network()
+    with pytest.raises(NotImplementedError):
+        Components(ctype=ct, n=n)
 
 
 @pytest.fixture
@@ -20,11 +31,6 @@ def legacy_component():
         dynamic=dynamic,
     )
     return component
-
-
-def test_deprecated_arguments():
-    with pytest.warns(DeprecationWarning):
-        Component(name="Generator", list_name="x", attrs=pd.DataFrame())
 
 
 def test_component_initialization(legacy_component):

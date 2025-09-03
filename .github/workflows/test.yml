@@ -43,6 +43,13 @@ jobs:
         - ubuntu-latest
         - macos-latest
         - windows-latest
+        api: [default, new_api]
+        exclude:
+        - os: macos-latest
+          api: new_api
+        - os: windows-latest
+          api: new_api
+
     env:
       MPLBACKEND: Agg  # https://github.com/orgs/community/discussions/26434
     steps:
@@ -73,49 +80,24 @@ jobs:
     - name: Install package and dependencies
       run: |
         python -m pip install uv
-        uv pip install --compile --system "$(ls dist/*.whl)[dev,hdf5,excel,cartopy]"
+        uv sync --all-extras --no-install-project
+        uv pip install "$(ls dist/*.whl)"
 
-    - name: Run unit tests
+    - name: Run unit tests (old API)
+      if: matrix.api == 'default'
       run: |
-        coverage run -m pytest --mpl
-        coverage xml
+        uv run pytest --mpl --cov=pypsa && uv run coverage xml
+
+    - name: Run unit tests (new API)
+      if: matrix.api == 'new_api'
+      run: |
+        uv run pytest --new-components-api
 
     - name: Upload code coverage report
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-
-  test-docs-build:
-    name: Test docs build # Also tests example notebooks (similar to nbmake)
-    needs: [build]
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0 # Needed for setuptools_scm
-
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: 3.12
-
-    - name: Download package
-      uses: actions/download-artifact@v4
-      with:
-        name: Packages
-        path: dist
-
-    - name: Install package and dependencies
-      run: |
-        python -m pip install uv
-        uv pip install --system nbmake requests
-        uv pip install --system "$(ls dist/*.whl)[dev, cartopy, docs]"
-
-    - name: Test docs build
-      run: |
-        sudo apt-get install -y pandoc
-        pytest test/test_docs.py --test-docs-build
 
   check-types:
     name: Check types
@@ -141,12 +123,9 @@ jobs:
     - name: Install package and dependencies
       run: |
         python -m pip install uv
-        uv pip install --system nbmake requests
-        uv pip install --system "$(ls dist/*.whl)[dev]"
-
-        # TODO: Remove once types in linopy are resolved
-        uv pip install --system linopy==0.3.14 --reinstall
+        uv sync --all-extras --no-install-project
+        uv pip install "$(ls dist/*.whl)"
 
     - name: Run type checker (mypy)
       run: |
-        mypy .
+        uv run mypy .

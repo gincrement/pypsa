@@ -79,6 +79,19 @@ def test_grouping_by_new_registered_key(ac_dc_network_r):
     assert df.index.nlevels == 2
 
 
+def test_drop_zero(ac_dc_network):
+    n = ac_dc_network
+    df = n.statistics.optimal_capacity(drop_zero=True)
+    assert df.empty
+
+    df = n.statistics.optimal_capacity()
+    assert df.empty
+
+    df = n.statistics.optimal_capacity(drop_zero=False)
+    assert not df.empty
+    assert np.any(df == 0)
+
+
 def test_zero_profit_rule_branches(ac_dc_network_r):
     n = ac_dc_network_r
     revenue = n.statistics.revenue(aggregate_time="sum")
@@ -152,11 +165,11 @@ def test_opex():
     assert opex.loc["Generator", "gen"] == 2 * 2 * 5 + 2 * 0.2 * 5**2
     assert opex.loc["StorageUnit", "su"] == 2 * 20 * 2
 
-    n.generators.marginal_cost_quadratic = 0
-    n.generators.committable = True
-    n.generators.start_up_cost = 4
-    n.generators.shut_down_cost = 5
-    n.generators.stand_by_cost = 9
+    n.c.generators.static.marginal_cost_quadratic = 0
+    n.c.generators.static.committable = True
+    n.c.generators.static.start_up_cost = 4
+    n.c.generators.static.shut_down_cost = 5
+    n.c.generators.static.stand_by_cost = 9
 
     n.optimize()
 
@@ -257,16 +270,16 @@ def test_aggregate_across_components(ac_dc_network_r):
     assert "component" not in df.index.names
 
 
-def test_multiindexed(ac_dc_network_mi):
-    n = ac_dc_network_mi
+def test_multiindexed(ac_dc_periods):
+    n = ac_dc_periods
     df = n.statistics()
     assert not df.empty
     assert df.columns.nlevels == 2
     assert df.columns.unique(1)[0] == 2013
 
 
-def test_multiindexed_aggregate_across_components(ac_dc_network_mi):
-    n = ac_dc_network_mi
+def test_multiindexed_aggregate_across_components(ac_dc_periods):
+    n = ac_dc_periods
     df = n.statistics.installed_capacity(
         comps=["Generator", "Line"], aggregate_across_components=True
     )
@@ -279,16 +292,16 @@ def test_inactive_exclusion_in_static(ac_dc_network_r):
     df = n.statistics()
     assert "Line" in df.index.unique(0)
 
-    n.lines["active"] = False
+    n.c.lines.static["active"] = False
     df = n.statistics()
     assert "Line" not in df.index.unique(0)
 
-    n.lines["active"] = True
+    n.c.lines.static["active"] = True
 
 
 def test_transmission_carriers(ac_dc_network_r):
     n = ac_dc_network_r
-    n.lines["carrier"] = "AC"
+    n.c.lines.static["carrier"] = "AC"
     df = pypsa.statistics.get_transmission_carriers(ac_dc_network_r)
     assert "AC" in df.unique(1)
 

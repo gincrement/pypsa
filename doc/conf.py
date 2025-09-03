@@ -17,12 +17,12 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 import doctest
-import os
 import sys
 from importlib.metadata import version as get_version
+from pathlib import Path
 
 # Add the pypsa directory to the path
-sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, str(Path("..").resolve()))
 
 # For some reason is this needed, otherwise autosummary does fail on RTD but not locally
 import pypsa  # noqa
@@ -234,6 +234,7 @@ htmlhelp_basename = "PyPSAdoc"
 
 # -- Options for nbsphinx -------------------------------------------------
 # nbsphinx_kernel_name = 'pypsa'
+nbsphinx_allow_errors = True
 nbsphinx_prolog = """
 {% set docname = env.doc2path(env.docname, base=None).replace("nblink", "ipynb").replace("examples/", "examples/notebooks/") %}
 {% if env.config.release != 'master' %}

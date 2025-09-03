@@ -31,16 +31,8 @@ except ImportError:
     explore_deps_present = False
 
 
-def test_deprecated_namespace(ac_dc_network):
-    from pypsa.plot import plot as plot_deprecated
-
-    with pytest.warns(DeprecationWarning):
-        plot_deprecated(ac_dc_network)
-    plt.close()
-
-
-@pytest.mark.parametrize("margin", (None, 0.1))
-@pytest.mark.parametrize("jitter", (None, 1))
+@pytest.mark.parametrize("margin", [None, 0.1])
+@pytest.mark.parametrize("jitter", [None, 1])
 @pytest.mark.skipif(os.name == "nt", reason="tcl_findLibrary on Windows")
 def test_plot_standard_params_wo_geomap(ac_dc_network, margin, jitter):
     n = ac_dc_network
@@ -49,8 +41,8 @@ def test_plot_standard_params_wo_geomap(ac_dc_network, margin, jitter):
 
 
 @pytest.mark.skipif(not cartopy_present, reason="Cartopy not installed")
-@pytest.mark.parametrize("margin", (None, 0.1))
-@pytest.mark.parametrize("jitter", (None, 1))
+@pytest.mark.parametrize("margin", [None, 0.1])
+@pytest.mark.parametrize("jitter", [None, 1])
 def test_plot_standard_params_w_geomap(ac_dc_network, margin, jitter):
     n = ac_dc_network
     n.plot.map(geomap=True, margin=margin, jitter=jitter)
@@ -68,27 +60,28 @@ def test_plot_on_axis_wo_geomap(ac_dc_network):
 def test_plot_on_axis_w_geomap(ac_dc_network):
     n = ac_dc_network
     fig, ax = plt.subplots()
+
     with pytest.raises(ValueError):
         n.plot.map(ax=ax, geomap=True)
-        plt.close()
+    plt.close()
 
 
 def test_plot_bus_circles(ac_dc_network):
     n = ac_dc_network
 
-    bus_sizes = n.generators.groupby(["bus", "carrier"]).p_nom.mean()
+    bus_sizes = n.c.generators.static.groupby(["bus", "carrier"]).p_nom.mean()
     bus_sizes[:] = 1
-    bus_colors = n.carriers.color
+    bus_colors = n.c.carriers.static.color
     n.plot.map(bus_sizes=bus_sizes, bus_colors=bus_colors, geomap=False)
     plt.close()
 
     # Retrieving the colors from carriers also should work
-    n.carriers["color"] = bus_colors
+    n.c.carriers.static["color"] = bus_colors
     n.plot.map(bus_sizes=bus_sizes)
     plt.close()
 
     # Retrieving the colors from carriers also should work
-    n.carriers["color"] = bus_colors
+    n.c.carriers.static["color"] = bus_colors
     n.plot.map(bus_sizes=bus_sizes)
     plt.close()
 
@@ -96,12 +89,16 @@ def test_plot_bus_circles(ac_dc_network):
 def test_plot_split_circles(ac_dc_network):
     n = ac_dc_network
 
-    gen_sizes = n.generators.groupby(["bus", "carrier"]).p_nom.sum()
+    gen_sizes = n.c.generators.static.groupby(["bus", "carrier"]).p_nom.sum()
     gen_sizes[:] = 500
     n.loads.carrier = "load"
-    load_sizes = -n.loads_t.p_set.mean().groupby([n.loads.bus, n.loads.carrier]).max()
+    load_sizes = (
+        -n.c.loads.dynamic.p_set.mean()
+        .groupby([n.c.loads.static.bus, n.c.loads.static.carrier])
+        .max()
+    )
     bus_sizes = pd.concat((gen_sizes, load_sizes)) / 1e3
-    bus_colors = n.carriers.color
+    bus_colors = n.c.carriers.static.color
     n.plot.map(
         bus_sizes=bus_sizes, bus_colors=bus_colors, bus_split_circles=True, geomap=False
     )
@@ -111,7 +108,7 @@ def test_plot_split_circles(ac_dc_network):
 def test_plot_with_bus_cmap(ac_dc_network):
     n = ac_dc_network
 
-    buses = n.buses.index
+    buses = n.c.buses.static.index
     rng = np.random.default_rng()  # Create a random number generator
     colors = pd.Series(rng.random(size=len(buses)), buses)
     n.plot.map(bus_colors=colors, bus_cmap="coolwarm", geomap=False)
@@ -121,7 +118,7 @@ def test_plot_with_bus_cmap(ac_dc_network):
 def test_plot_with_line_cmap(ac_dc_network):
     n = ac_dc_network
 
-    lines = n.lines.index
+    lines = n.c.lines.static.index
     rng = np.random.default_rng()  # Create a random number generator
     colors = pd.Series(rng.random(size=len(lines)), lines)
     n.plot.map(line_colors=colors, line_cmap="coolwarm", geomap=False)
@@ -131,9 +128,9 @@ def test_plot_with_line_cmap(ac_dc_network):
 def test_plot_alpha(ac_dc_network):
     n = ac_dc_network
 
-    bus_sizes = n.generators.groupby(["bus", "carrier"]).p_nom.mean()
+    bus_sizes = n.c.generators.static.groupby(["bus", "carrier"]).p_nom.mean()
     bus_sizes[:] = 1
-    bus_colors = n.carriers.color
+    bus_colors = n.c.carriers.static.color
     n.plot.map(
         bus_sizes=bus_sizes,
         bus_colors=bus_colors,
@@ -145,7 +142,7 @@ def test_plot_alpha(ac_dc_network):
     plt.close()
 
     # Retrieving the colors from carriers also should work
-    n.carriers["color"] = bus_colors
+    n.c.carriers.static["color"] = bus_colors
     n.plot.map(bus_sizes=bus_sizes)
     plt.close()
 
@@ -153,7 +150,7 @@ def test_plot_alpha(ac_dc_network):
 def test_plot_line_subset(ac_dc_network):
     n = ac_dc_network
 
-    lines = n.lines.index[:2]
+    lines = n.c.lines.static.index[:2]
     rng = np.random.default_rng()  # Create a random number generator
     colors = pd.Series(rng.random(size=len(lines)), lines)
     n.plot.map(line_colors=colors, line_cmap="coolwarm", geomap=False)
@@ -163,15 +160,15 @@ def test_plot_line_subset(ac_dc_network):
 def test_plot_bus_subset(ac_dc_network):
     n = ac_dc_network
 
-    buses = n.buses.index[:2]
+    buses = n.c.buses.static.index[:2]
     rng = np.random.default_rng()  # Create a random number generator
     colors = pd.Series(rng.random(size=len(buses)), buses)
     n.plot.map(bus_colors=colors, bus_cmap="coolwarm", geomap=False)
     plt.close()
 
-    bus_sizes = n.generators.groupby(["bus", "carrier"]).p_nom.mean()[:3]
+    bus_sizes = n.c.generators.static.groupby(["bus", "carrier"]).p_nom.mean()[:3]
     bus_sizes[:] = 1
-    bus_colors = n.carriers.color
+    bus_colors = n.c.carriers.static.color
     n.plot.map(
         bus_sizes=bus_sizes,
         bus_colors=bus_colors,
@@ -200,7 +197,7 @@ def test_plot_from_statistics(ac_dc_network):
 
     bus_scale = 5e-6
     branch_scale = 1e-4
-    bus_colors = n.carriers.color
+    bus_colors = n.c.carriers.static.color
 
     n.plot.map(
         bus_sizes=bus_sizes * bus_scale,
@@ -230,8 +227,8 @@ def test_plot_map_flow(ac_dc_network):
     n.plot.map(line_flow=line_flow, link_flow=link_flow, geomap=False)
     plt.close()
 
-    n.lines_t.p0.loc[:, line_flow.index] = 0
-    n.lines_t.p0 += line_flow
+    n.c.lines.dynamic.p0.loc[:, line_flow.index] = 0
+    n.c.lines.dynamic.p0 += line_flow
     n.plot.map(line_flow="mean", geomap=False)
     plt.close()
 
@@ -245,7 +242,9 @@ def test_plot_map_line_colorbar(ac_dc_network):
     norm = plt.Normalize(vmin=0, vmax=10)
 
     n.plot.map(
-        line_colors=n.lines.index.astype(int), line_cmap="viridis", line_cmap_norm=norm
+        line_colors=n.c.lines.static.index.astype(int),
+        line_cmap="viridis",
+        line_cmap_norm=norm,
     )
 
     plt.colorbar(plt.cm.ScalarMappable(cmap="viridis", norm=norm), ax=plt.gca())
@@ -256,7 +255,7 @@ def test_plot_map_bus_colorbar(ac_dc_network):
 
     norm = plt.Normalize(vmin=0, vmax=10)
 
-    n.plot.map(bus_colors=n.buses.x, bus_cmap="viridis", bus_cmap_norm=norm)
+    n.plot.map(bus_colors=n.c.buses.static.x, bus_cmap="viridis", bus_cmap_norm=norm)
 
     plt.colorbar(plt.cm.ScalarMappable(cmap="viridis", norm=norm), ax=plt.gca())
 
@@ -271,8 +270,8 @@ def test_plot_legend_lines(ac_dc_network):
         ax,
         [2, 5],
         ["label a", "label b"],
-        patch_kw=dict(alpha=0.5),
-        legend_kw=dict(frameon=False),
+        patch_kw={"alpha": 0.5},
+        legend_kw={"frameon": False},
     )
 
     plt.close()
@@ -288,7 +287,7 @@ def test_plot_legend_patches(ac_dc_network):
         ax,
         ["r", "g", "b"],
         ["red", "green", "blue"],
-        legend_kw=dict(frameon=False),
+        legend_kw={"frameon": False},
     )
 
     plt.close()
@@ -337,3 +336,35 @@ def test_network_explore(ac_dc_network):
     n = ac_dc_network
 
     n.plot.explore()
+
+
+def test_plot_alias_for_plot_map(ac_dc_network):
+    """Test that n.plot() is an alias for n.plot.map()."""
+    n = ac_dc_network
+
+    # Both should return the same type of object and produce equivalent plots
+    # Test without geomap to avoid external dependencies
+    result1 = n.plot(geomap=False)
+    plt.close()
+
+    result2 = n.plot.map(geomap=False)
+    plt.close()
+
+    # Both should return the same type of object
+    assert type(result1) is type(result2)
+
+
+@pytest.mark.skipif(
+    not explore_deps_present,
+    reason="Dependencies for n.plot.explore() not installed: folium, mapclassify",
+)
+def test_plot_explore_alias_for_explore(ac_dc_network):
+    """Test that n.plot.explore is an alias for n.explore()."""
+    n = ac_dc_network
+
+    # Both should return the same type of object
+    result1 = n.plot.explore()
+    result2 = n.explore()
+
+    # Both should return folium Map objects
+    assert type(result1) is type(result2)

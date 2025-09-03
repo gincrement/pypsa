@@ -1,5 +1,6 @@
 """Plot the network interactively using plotly and folium."""
 
+import importlib
 import logging
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any
@@ -75,10 +76,9 @@ def iplot(
     mapbox: bool = False,
     mapbox_style: str = "open-street-map",
     mapbox_token: str = "",
-    mapbox_parameters: dict = {},
+    mapbox_parameters: dict | None = None,
 ) -> dict:
-    """
-    Plot the network buses and lines interactively using plotly.
+    """Plot the network buses and lines interactively using plotly.
 
     Parameters
     ----------
@@ -89,7 +89,7 @@ def iplot(
     bus_colors : dict/pandas.Series
         Colors for the buses, defaults to "cadetblue". If bus_sizes is a
         pandas.Series with a Multiindex, bus_colors defaults to the
-        n.carriers['color'] column.
+        n.c.carriers.static['color'] column.
     bus_alpha : float
         Adds alpha channel to buses, defaults to 1.
     bus_sizes : float/pandas.Series
@@ -162,11 +162,12 @@ def iplot(
 
     """
     if fig is None:
-        fig = dict(data=[], layout={})
+        fig = {"data": [], "layout": {}}
 
     if bus_text is None:
-        bus_text = "Bus " + n.buses.index
-
+        bus_text = "Bus " + n.c.buses.static.index
+    if mapbox_parameters is None:
+        mapbox_parameters = {}
     x, y = apply_layouter(n, layouter=layouter, inplace=False)
 
     rng = np.random.default_rng()  # Create a random number generator
@@ -174,40 +175,22 @@ def iplot(
         x = x + rng.uniform(low=-jitter, high=jitter, size=len(x))
         y = y + rng.uniform(low=-jitter, high=jitter, size=len(y))
 
-    bus_trace = dict(
-        x=x,
-        y=y,
-        text=bus_text,
-        type="scatter",
-        mode="markers",
-        hoverinfo="text",
-        opacity=bus_alpha,
-        marker=dict(color=bus_colors, size=bus_sizes),
-    )
+    bus_trace = {
+        "x": x,
+        "y": y,
+        "text": bus_text,
+        "type": "scatter",
+        "mode": "markers",
+        "hoverinfo": "text",
+        "opacity": bus_alpha,
+        "marker": {"color": bus_colors, "size": bus_sizes},
+    }
 
     if bus_cmap is not None:
         bus_trace["marker"]["colorscale"] = bus_cmap
 
     if bus_colorbar is not None:
         bus_trace["marker"]["colorbar"] = bus_colorbar
-
-    # Plot branches:
-    if isinstance(line_widths, pd.Series):
-        if isinstance(line_widths.index, pd.MultiIndex):
-            raise DeprecationWarning(
-                "Index of argument 'line_widths' is a Multiindex, "
-                "this is not support since pypsa v0.17 and will be removed in v1.0. "
-                "Set differing widths with arguments 'line_widths', "
-                "'link_widths' and 'transformer_widths'."
-            )
-    if isinstance(line_colors, pd.Series):
-        if isinstance(line_colors.index, pd.MultiIndex):
-            raise DeprecationWarning(
-                "Index of argument 'line_colors' is a Multiindex, "
-                "this is not support since pypsa v0.17. and will be removed in v1.0. "
-                "Set differing colors with arguments 'line_colors', "
-                "'link_colors' and 'transformer_colors'."
-            )
 
     if branch_components is None:
         branch_components = n.branch_components
@@ -244,29 +227,31 @@ def iplot(
         y0 = c.static.bus0.map(y)
         y1 = c.static.bus1.map(y)
 
-        for b in c.static.index:
-            shapes.append(
-                dict(
-                    type="line",
-                    opacity=0.8,
-                    x0=x0[b],
-                    y0=y0[b],
-                    x1=x1[b],
-                    y1=y1[b],
-                    line=dict(color=b_colors[b], width=b_widths[b]),
-                )
-            )
+        shapes.extend(
+            [
+                {
+                    "type": "line",
+                    "opacity": 0.8,
+                    "x0": x0[b],
+                    "y0": y0[b],
+                    "x1": x1[b],
+                    "y1": y1[b],
+                    "line": {"color": b_colors[b], "width": b_widths[b]},
+                }
+                for b in c.static.index
+            ]
+        )
 
         shape_traces.append(
-            dict(
-                x=0.5 * (x0 + x1),
-                y=0.5 * (y0 + y1),
-                text=b_text,
-                type="scatter",
-                mode="markers",
-                hoverinfo="text",
-                marker=dict(opacity=0.0),
-            )
+            {
+                "x": 0.5 * (x0 + x1),
+                "y": 0.5 * (y0 + y1),
+                "text": b_text,
+                "type": "scatter",
+                "mode": "markers",
+                "hoverinfo": "text",
+                "marker": {"opacity": 0.0},
+            }
         )
 
     if mapbox:
@@ -292,13 +277,13 @@ def iplot(
     else:
         fig["data"].extend([bus_trace] + shape_traces)
 
-    fig["layout"].update(dict(title=title, hovermode="closest", showlegend=False))
+    fig["layout"].update({"title": title, "hovermode": "closest", "showlegend": False})
 
     if size is not None:
         if len(size) != 2:
             msg = "Parameter size must specify a tuple (width, height)."
             raise ValueError(msg)
-        fig["layout"].update(dict(width=size[0], height=size[1]))
+        fig["layout"].update({"width": size[0], "height": size[1]})
 
     if mapbox:
         if mapbox_token != "":
@@ -306,21 +291,23 @@ def iplot(
 
         mapbox_parameters.setdefault("style", mapbox_style)
 
-        if mapbox_parameters["style"] in _token_required_mb_styles:
-            if "accesstoken" not in mapbox_parameters.keys():
-                msg = (
-                    "Using Mapbox layout styles requires a valid access token from "
-                    "https://www.mapbox.com/, style which do not require a token "
-                    "are:\n{', '.join(_open__mb_styles)}."
-                )
-                raise ValueError(msg)
+        if (
+            mapbox_parameters["style"] in _token_required_mb_styles
+            and "accesstoken" not in mapbox_parameters
+        ):
+            msg = (
+                "Using Mapbox layout styles requires a valid access token from "
+                "https://www.mapbox.com/, style which do not require a token "
+                "are:\n{', '.join(_open__mb_styles)}."
+            )
+            raise ValueError(msg)
 
-        if "center" not in mapbox_parameters.keys():
-            lon = (n.buses.x.min() + n.buses.x.max()) / 2
-            lat = (n.buses.y.min() + n.buses.y.max()) / 2
-            mapbox_parameters["center"] = dict(lat=lat, lon=lon)
+        if "center" not in mapbox_parameters:
+            lon = (n.c.buses.static.x.min() + n.c.buses.static.x.max()) / 2
+            lat = (n.c.buses.static.y.min() + n.c.buses.static.y.max()) / 2
+            mapbox_parameters["center"] = {"lat": lat, "lon": lon}
 
-        if "zoom" not in mapbox_parameters.keys():
+        if "zoom" not in mapbox_parameters:
             mapbox_parameters["zoom"] = 2
 
         fig["layout"]["mapbox"] = mapbox_parameters
@@ -344,8 +331,7 @@ def explore(
     tiles: str = "OpenStreetMap",
     components: set[str] | None = None,
 ) -> Any | None:  # TODO: returns a FoliunMap or None
-    """
-    Create an interactive map displaying PyPSA network components using geopandas exlore() and folium.
+    """Create an interactive map displaying PyPSA network components using geopandas exlore() and folium.
 
     This function generates a Folium map showing buses, lines, links, and transformers from the provided network object.
 
@@ -370,14 +356,17 @@ def explore(
         A Folium map object with the PyPSA.Network components plotted.
 
     """
-    try:
-        import mapclassify  # noqa: F401
-        from folium import Element, LayerControl, Map, TileLayer
-    except ImportError:
+    # Check if required packages are available
+    folium_available = importlib.util.find_spec("folium") is not None
+    mapclassify_available = importlib.util.find_spec("mapclassify") is not None
+
+    if not (folium_available and mapclassify_available):
         logger.warning(
             "folium and mapclassify need to be installed to use `n.explore()`."
         )
         return None
+
+    from folium import Element, LayerControl, Map, TileLayer  # noqa: PLC0415
 
     if n.crs and crs is None:
         crs = n.crs
@@ -421,20 +410,20 @@ def explore(
     ]
     components_present = []
 
-    if not n.transformers.empty and "Transformer" in components:
-        x1 = n.transformers.bus0.map(n.buses.x)
-        y1 = n.transformers.bus0.map(n.buses.y)
-        x2 = n.transformers.bus1.map(n.buses.x)
-        y2 = n.transformers.bus1.map(n.buses.y)
+    if not n.c.transformers.static.empty and "Transformer" in components:
+        x1 = n.c.transformers.static.bus0.map(n.c.buses.static.x)
+        y1 = n.c.transformers.static.bus0.map(n.c.buses.static.y)
+        x2 = n.c.transformers.static.bus1.map(n.c.buses.static.x)
+        y2 = n.c.transformers.static.bus1.map(n.c.buses.static.y)
         valid_rows = ~(x1.isna() | y1.isna() | x2.isna() | y2.isna())
 
         if num_invalid := sum(~valid_rows):
             logger.info(
-                f"Omitting {num_invalid} transformers due to missing coordinates"
+                "Omitting %d transformers due to missing coordinates", num_invalid
             )
 
         gdf_transformers = gpd.GeoDataFrame(
-            n.transformers[valid_rows],
+            n.c.transformers.static[valid_rows],
             geometry=linestrings(
                 np.stack(
                     [
@@ -456,18 +445,18 @@ def explore(
         )
         components_present.append("Transformer")
 
-    if not n.lines.empty and "Line" in components:
-        x1 = n.lines.bus0.map(n.buses.x)
-        y1 = n.lines.bus0.map(n.buses.y)
-        x2 = n.lines.bus1.map(n.buses.x)
-        y2 = n.lines.bus1.map(n.buses.y)
+    if not n.c.lines.static.empty and "Line" in components:
+        x1 = n.c.lines.static.bus0.map(n.c.buses.static.x)
+        y1 = n.c.lines.static.bus0.map(n.c.buses.static.y)
+        x2 = n.c.lines.static.bus1.map(n.c.buses.static.x)
+        y2 = n.c.lines.static.bus1.map(n.c.buses.static.y)
         valid_rows = ~(x1.isna() | y1.isna() | x2.isna() | y2.isna())
 
         if num_invalid := sum(~valid_rows):
-            logger.info(f"Omitting {num_invalid} lines due to missing coordinates.")
+            logger.info("Omitting %d lines due to missing coordinates.", num_invalid)
 
         gdf_lines = gpd.GeoDataFrame(
-            n.lines[valid_rows],
+            n.c.lines.static[valid_rows],
             geometry=linestrings(
                 np.stack(
                     [
@@ -485,18 +474,18 @@ def explore(
         )
         components_present.append("Line")
 
-    if not n.links.empty and "Link" in components:
-        x1 = n.links.bus0.map(n.buses.x)
-        y1 = n.links.bus0.map(n.buses.y)
-        x2 = n.links.bus1.map(n.buses.x)
-        y2 = n.links.bus1.map(n.buses.y)
+    if not n.c.links.static.empty and "Link" in components:
+        x1 = n.c.links.static.bus0.map(n.c.buses.static.x)
+        y1 = n.c.links.static.bus0.map(n.c.buses.static.y)
+        x2 = n.c.links.static.bus1.map(n.c.buses.static.x)
+        y2 = n.c.links.static.bus1.map(n.c.buses.static.y)
         valid_rows = ~(x1.isna() | y1.isna() | x2.isna() | y2.isna())
 
         if num_invalid := sum(~valid_rows):
-            logger.info(f"Omitting {num_invalid} links due to missing coordinates.")
+            logger.info("Omitting %d links due to missing coordinates.", num_invalid)
 
         gdf_links = gpd.GeoDataFrame(
-            n.links[valid_rows],
+            n.c.links.static[valid_rows],
             geometry=linestrings(
                 np.stack(
                     [
@@ -514,9 +503,11 @@ def explore(
         )
         components_present.append("Link")
 
-    if not n.buses.empty and "Bus" in components:
+    if not n.c.buses.static.empty and "Bus" in components:
         gdf_buses = gpd.GeoDataFrame(
-            n.buses, geometry=gpd.points_from_xy(n.buses.x, n.buses.y), crs=crs
+            n.c.buses.static,
+            geometry=gpd.points_from_xy(n.c.buses.static.x, n.c.buses.static.y),
+            crs=crs,
         )
 
         gdf_buses[gdf_buses.is_valid].explore(
@@ -529,11 +520,12 @@ def explore(
         )
         components_present.append("Bus")
 
-    if not n.generators.empty and "Generator" in components:
+    if not n.c.generators.static.empty and "Generator" in components:
         gdf_generators = gpd.GeoDataFrame(
-            n.generators,
+            n.c.generators.static,
             geometry=gpd.points_from_xy(
-                n.generators.bus.map(n.buses.x), n.generators.bus.map(n.buses.y)
+                n.c.generators.static.bus.map(n.c.buses.static.x),
+                n.c.generators.static.bus.map(n.c.buses.static.y),
             ),
             crs=crs,
         )
@@ -548,13 +540,13 @@ def explore(
         )
         components_present.append("Generator")
 
-    if not n.loads.empty and "Load" in components:
-        loads = n.loads.copy()
-        loads["p_set_sum"] = n.loads_t.p_set.sum(axis=0).round(1)
+    if not n.c.loads.static.empty and "Load" in components:
+        loads = n.c.loads.static.copy()
+        loads["p_set_sum"] = n.c.loads.dynamic.p_set.sum(axis=0).round(1)
         gdf_loads = gpd.GeoDataFrame(
             loads,
             geometry=gpd.points_from_xy(
-                loads.bus.map(n.buses.x), loads.bus.map(n.buses.y)
+                loads.bus.map(n.c.buses.static.x), loads.bus.map(n.c.buses.static.y)
             ),
             crs=crs,
         )
@@ -569,11 +561,12 @@ def explore(
         )
         components_present.append("Load")
 
-    if not n.storage_units.empty and "StorageUnit" in components:
+    if not n.c.storage_units.static.empty and "StorageUnit" in components:
         gdf_storage_units = gpd.GeoDataFrame(
-            n.storage_units,
+            n.c.storage_units.static,
             geometry=gpd.points_from_xy(
-                n.storage_units.bus.map(n.buses.x), n.storage_units.bus.map(n.buses.y)
+                n.c.storage_units.static.bus.map(n.c.buses.static.x),
+                n.c.storage_units.static.bus.map(n.c.buses.static.y),
             ),
             crs=crs,
         )
@@ -590,11 +583,13 @@ def explore(
 
     if len(components_present) > 0:
         logger.info(
-            f"Components rendered on the map: {', '.join(sorted(components_present))}."
+            "Components rendered on the map: %s",
+            ", ".join(sorted(components_present)),
         )
     if len(set(components) - set(components_present)) > 0:
         logger.info(
-            f"Components omitted as they are missing or not selected: {', '.join(sorted(set(components_possible) - set(components_present)))}."
+            "Components omitted as they are missing or not selected: %s",
+            ", ".join(sorted(set(components_possible) - set(components_present))),
         )
 
     # Set the default view to the bounds of the elements in the map
