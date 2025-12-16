@@ -460,15 +460,17 @@ def apply_line_types(n: Network) -> None:
         n.c.lines.static.loc[lines_with_types_b, attr] = lines[attr]
 
 
+
 def apply_transformer_types(n: Network) -> None:
     """Calculate transformer electrical parameters x, r, b, g from standard types."""
     trafos_with_types_b = n.c.transformers.static.type != ""
     if trafos_with_types_b.zsum() == 0:
         return
 
-    missing_types = pd.Index(
-        n.c.transformers.static.loc[trafos_with_types_b, "type"].unique()
-    ).difference(n.c.transformer_types.static.index)
+    # Get unique transformer types from transfomers
+    transformer_types_used = n.c.transformers.static.loc[trafos_with_types_b, "type"].unique()
+    missing_types = pd.Index(transformer_types_used).difference(n.c.transformer_types.names)
+    
     if not missing_types.empty:
         msg = (
             f"The type(s) {', '.join(missing_types)} do(es) not exist in "
@@ -479,8 +481,18 @@ def apply_transformer_types(n: Network) -> None:
     # Get a copy of the transformers data
     # (joining pulls in "phase_shift", "s_nom", "tap_side" from TransformerType)
     t = n.c.transformers.static.loc[
-        trafos_with_types_b, ["type", "tap_position", "num_parallel"]
-    ].join(n.c.transformer_types.static, on="type")
+        trafos_with_types_b, ["type", "num_parallel", "tap_ratio", "tap_position"]
+    ].copy()
+
+    if n.has_scenarios:
+        # For stochastic network, use the first scenario's line types
+        # User changes across line type data are caught by the consistency check
+        types_to_use = n.c.transformer_types.static.xs(
+            n.c.transformer_types.static.index.get_level_values(0)[0], level=0
+        )
+        t = t.join(types_to_use, on="type")
+    else:
+        t = t.join(n.c.transformer_types.static, on="type")
 
     t["r"] = t["vscr"] / 100.0
     t["x"] = np.sqrt((t["vsc"] / 100.0) ** 2 - t["r"] ** 2)
