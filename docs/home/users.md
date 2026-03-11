@@ -71,6 +71,8 @@ The following universities, research institutes, companies, governmental and non
 
 - **[:flag_ca: Simon Fraser University](https://www.sfu.ca/)** at the [ΔE+ (Delta-E-plus)](https://www.sfu.ca/fas/research/fas-research-labs/delta-e/) uses PyPSA to explores the synergies and trade-offs at the nexus of energy+ to support effective policy development.
 
+- **[:flag_bo: University of San Simon](https://www.umss.edu.bo/centro-de-investigaciones-en-energia-cie/)** introduced PyPSA-BO and created a soft-link to an integrated assessment model (GCAM) to show structural differences of the modelling approaches: [doi.org/10.1016/j.esr.2026.102138](https://doi.org/10.1016/j.esr.2026.102138)
+
 ## Research Institutes
 
 - **[:flag_eu: Joint Research Centre (JRC)](https://joint-research-centre.ec.europa.eu/index_en)** of the [European Commission](https://ec.europa.eu/info/index_en) converted METIS/PRIMES scenarios for the [Fit for 55 package to PyPSA networks](https://zenodo.org/record/7065568#.YygkDKRByMo) in 2022 and used PyPSA for further research: [doi:10.3390/en15124233](https://doi.org/10.3390/en15124233) in 2022. In 2023, JRC used PyPSA for the study ["MODECO – Modelling study on the role of energy communities in the energy transition"](https://publications.jrc.ec.europa.eu/repository/handle/JRC132896) and in 2024 for the study ["Redispatch and Congestion Management"](https://publications.jrc.ec.europa.eu/repository/handle/JRC137685)
