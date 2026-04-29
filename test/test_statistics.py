@@ -372,6 +372,15 @@ def test_prices(ac_dc_network_r):
     assert set(grouped.index) == set(n.c.buses.static.carrier.unique())
 
 
+def test_emissions(ac_dc_network_r):
+    n = ac_dc_network_r
+    emissions = n.statistics.carbon_emission().sum()
+
+    assert (
+        emissions == n.global_constraints.constant["co2_limit"]
+    )
+
+
 @pytest.fixture
 def network_with_nice_name():
     n = pypsa.Network()
