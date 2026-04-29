@@ -14,7 +14,7 @@ SPDX-License-Identifier: CC-BY-4.0
     next update! If you would like to use these features in the meantime, you will need
     to install the `master` branch, e.g. `pip install git+https://github.com/pypsa/pypsa`.
 
-- Add 'n.statistics.carbon_emission()' calculating the carbon emissions.
+- Add `n.statistics.carbon_emission()` calculating the carbon emissions.
   
 ### Bug Fixes
 
